@@ -24,22 +24,55 @@ Frame Rate (max)	30fps @ 640x480
 
 """
 
-class CircleDetect(Node):
+class DetectCircle(Node):
     
     def __init__(self):
         super().__init__('CircleDetect')
         self.get_logger().info("CircleDetect start")
         
         self.sub_img = self.create_subscription(Image,'/image_raw',self.cb_image,1)
-
+        self.bridge = CvBridge()
+        
     def cb_image(self, msg):
-            self.image=msg
-            self.get_logger().info(f"Pixel 0,0 is of color: {msg.data[0]}")
-            self.get_logger().error(f"Is there a camera publishing data ?")
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            self.get_logger().info(f"Image dimensions: {cv_image.shape}")
+            self.detect_circle(cv_image)
+        except CvBridgeError as e:
+            self.get_logger().error(f"Failed to convert image: {e}")
+            
+    def detect_circle(self, cv_image):
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.medianBlur(gray, 5)
+
+        circles = cv2.HoughCircles(
+            gray,
+            cv2.HOUGH_GRADIENT,
+            dp=1.2,
+            minDist=30,
+            param1=90,
+            param2=40,
+            minRadius=75,
+            maxRadius=400
+        )
+
+        if circles is not None:
+            circles = np.uint16(np.around(circles))
+            best_circle = circles[0, 0]
+            cv2.circle(cv_image, (best_circle[0], best_circle[1]), best_circle[2], (0, 255, 0), 2) # (image, (x,y), radius, (BGR of circle draw), thickness)
+            cv2.circle(cv_image, (best_circle[0], best_circle[1]), 2, (0, 0, 255), 3) # Red dot at the center
+            self.get_logger().info(f"Detected {len(circles[0])} circle(s). Best one of radius {best_circle[2]}")
+        else:
+            self.get_logger().info("No circles detected.")
+
+        cv2.imshow("Detected Circles", cv_image)
+        cv2.waitKey(1)
+
+
 
 def main(args=None):
     rclpy.init(args=args)
-    node = CircleDetect()
+    node = DetectCircle()
     rclpy.spin(node)
     rclpy.shutdown()
     
