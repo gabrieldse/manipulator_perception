@@ -20,6 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'track_circle = manipulator_h_vision.track_circle:main',
         ],
     },
 )
