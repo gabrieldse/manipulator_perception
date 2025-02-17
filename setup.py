@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 from glob import glob
 import os
 
-package_name = 'manipulator_h_vision'
+package_name = 'ring_tracker'
 
 setup(
     name=package_name,
@@ -24,7 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'track_circle = manipulator_h_vision.track_circle:main',
+            'track_circle = ring_tracker.track_circle:main',
         ],
     },
 )

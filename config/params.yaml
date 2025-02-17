@@ -10,7 +10,7 @@
       image_height: 480
       camera_name: "test_camera"
       # reusing same camera intrinsics only for demo, should really be unique for camera2"
-      camera_info_url: "file:///root/dev_ws/src/manipulator_h_vision/config/camera_info.yaml"
+      camera_info_url: "file:///root/dev_ws/src/ring_tracker/config/camera_info.yaml"
       brightness: -1
       contrast: -1
       saturation: -1

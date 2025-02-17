@@ -51,7 +51,7 @@ class DetectCircle(Node):
         self.get_logger().info("CircleDetect start")
         
         self.sub_img = self.create_subscription(Image,'/image_raw',self.cb_image,1)
-        frequency = 1 # Hz
+        frequency = 22 # Hz
         # self.ts = ApproximateTimeSynchronizer([self.sub_img], queue_size=1, slop=1.0 / frequency)
         self.timer = self.create_timer(1.0 / frequency, self.timer_callback)  # 5 Hz
         # self.ts.registerCallback(self.cb_image)
@@ -109,23 +109,21 @@ class DetectCircle(Node):
             cv2.circle(latest_image, (best_circle[0], best_circle[1]), 2, (0, 0, 255), 3)  # Red dot at the center
             
             # Calculate the distance to the circle
-            focal_length_px = 350.15 # 1350  # Focal length in pixels; focal_pixel = (image_width_in_pixels * 0.5) / tan(FOV * 0.5 * PI/180) that gave me 35 015
-            real_radius = 20.8  # Radius of the circle in real life
+            focal_length_px = 350.15  # Focal length in pixels
+            real_radius = 20.8  # Radius of the circle in real life (in cm)
             detected_radius = best_circle[2]  # Radius of the circle in the image (in pixels)
             
-            distance = (focal_length_px * real_radius) / detected_radius
-            distance2 = (4*20.8*480)/(detected_radius*2*2.7) #2.7 is the sensor height in mm
-            self.get_logger().info(f"Distance to the circle: {distance:.2f} cm")
-            self.get_logger().info(f"Distance to the circle, method 2: {distance2:.2f} cm") # ref: 2
+            distance_z = (focal_length_px * real_radius) / detected_radius
+            distance2 = (4 * 20.8 * 480) / (detected_radius * 2 * 2.7)  # 2.7 is the sensor height in mm
+            self.get_logger().info(f"Distance to the circle (Z-axis): {distance_z:.2f} cm")
+            self.get_logger().info(f"Distance to the circle, method 2 (Z-axis): {distance2:.2f} cm") # ref: 2
             
-            
-            ######## Calculate X and Y distances ###########
-            
+            # Calculate X and Y distances
             image_center_x = latest_image.shape[1] / 2
             image_center_y = latest_image.shape[0] / 2
             
-            delta_x = best_circle[0] - image_center_x
-            delta_y = best_circle[1] - image_center_y
+            delta_x = image_center_x - best_circle[0]
+            delta_y = image_center_y - best_circle[1]
             
             distance_x = (delta_x * real_radius) / detected_radius
             distance_y = (delta_y * real_radius) / detected_radius
@@ -133,12 +131,30 @@ class DetectCircle(Node):
             self.get_logger().info(f"Distance to the circle (X-axis): {distance_x:.2f} cm")
             self.get_logger().info(f"Distance to the circle (Y-axis): {distance_y:.2f} cm")
             
-            #################################################
+            # Display distances on the screen
+            text_z = f"Z Distance: {distance_z:.2f} cm"
+            text_x = f"X Distance: {distance_x:.2f} cm"
+            text_y = f"Y Distance: {distance_y:.2f} cm"
             
-             
+            # Position of the text
+            text_position_z = (10, 30)  # (x, y) coordinates
+            text_position_x = (10, 60)
+            text_position_y = (10, 90)
             
+            # Font settings
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.8
+            font_color = (255, 255, 255)  # White color
+            font_thickness = 2
+            
+            # Put text on the image
+            cv2.putText(latest_image, text_z, text_position_z, font, font_scale, font_color, font_thickness)
+            cv2.putText(latest_image, text_x, text_position_x, font, font_scale, font_color, font_thickness)
+            cv2.putText(latest_image, text_y, text_position_y, font, font_scale, font_color, font_thickness)
+            
+            # Publish the Z distance
             distance_msg = Float32()
-            distance_msg.data = distance2/100
+            distance_msg.data = distance2 / 100
             self.distance_pub.publish(distance_msg)
             
             self.get_logger().info(f"Detected {len(circles[0])} circle(s). Best one of radius {best_circle[2]}. Center: {best_circle[1], best_circle[2]} ")
@@ -147,6 +163,7 @@ class DetectCircle(Node):
 
         cv2.imshow("Detected Circles", latest_image)
         cv2.waitKey(1)
+    
                
 class KalmanTracker:
     def __init__(self, delta_t=1.0, max_speed=5, trajectory_length=100):
