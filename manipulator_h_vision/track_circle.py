@@ -6,7 +6,27 @@ import numpy as np
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import Float32
 from cv_bridge import CvBridge, CvBridgeError
+
+
+"""
+Ref 2 : https://www.traimaocv.fr/CoursStereoVision/co/ModCamera_1.html
+
+La taille du pixel est :
+
+"« CMOS Sensor Data »"
+
+"« The CMOS sensor in the Logitech C270 webcam features the following data : »"
+
+"« Sensor Resolution = 1280 x 960 »"
+
+"« Pixel Dimension = 2,8 μm x 2,8 μm »"
+
+"« Sensor Dimension = 3,5 mm x 2,7 mm »"
+
+"« Sensor area = 9,45 mm2 »"
+"""
 
 """
 Camera parameters:
@@ -31,19 +51,36 @@ class DetectCircle(Node):
         self.get_logger().info("CircleDetect start")
         
         self.sub_img = self.create_subscription(Image,'/image_raw',self.cb_image,1)
+        frequency = 1 # Hz
+        # self.ts = ApproximateTimeSynchronizer([self.sub_img], queue_size=1, slop=1.0 / frequency)
+        self.timer = self.create_timer(1.0 / frequency, self.timer_callback)  # 5 Hz
+        # self.ts.registerCallback(self.cb_image)
+        
         self.bridge = CvBridge()
         self.tracker = KalmanTracker()
+        self.latest_image = None
+        
+        self.distance_pub = self.create_publisher(Float32, '/circle_distance_m', 10)
+        
+    def timer_callback(self):
+        """
+        Timer callback for 5 Hz processing.
+        """
+        if self.latest_image is not None:
+            # Process the latest image
+            self.get_logger().info(f"Image dimensions: {self.latest_image.shape}")
+            self.detect_circle(self.latest_image)
+        else:
+            self.get_logger().info("No image received yet.")
         
     def cb_image(self, msg):
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            self.get_logger().info(f"Image dimensions: {cv_image.shape}")
-            self.detect_circle(cv_image)
+            self.latest_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except CvBridgeError as e:
             self.get_logger().error(f"Failed to convert image: {e}")
             
-    def detect_circle(self, cv_image):
-        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+    def detect_circle(self, latest_image):
+        gray = cv2.cvtColor(latest_image, cv2.COLOR_BGR2GRAY)
         gray = cv2.medianBlur(gray, 5)
 
         circles = cv2.HoughCircles(
@@ -61,23 +98,56 @@ class DetectCircle(Node):
             circles = np.uint16(np.around(circles))
             best_circle = circles[0, 0]
             
-            # Kakman tracker
-            measurement = [best_circle[0],best_circle[1]]
+            # Kalman tracker
+            measurement = [best_circle[0], best_circle[1]]
             self.tracker.predict()
             updated_state = self.tracker.update(measurement)
-            self.get_logger().info(f"[KALMAN] center of circle: {updated_state[0],updated_state[1]} ")
+            self.get_logger().info(f"[KALMAN] center of circle: {updated_state[0], updated_state[1]} ")
             
-            self.tracker.draw_trajectory(cv_image)
-            cv2.circle(cv_image, (best_circle[0], best_circle[1]), best_circle[2], (0, 255, 0), 2) # (image, (x,y), radius, (BGR of circle draw), thickness)
-            cv2.circle(cv_image, (best_circle[0], best_circle[1]), 2, (0, 0, 255), 3) # Red dot at the center
-            self.get_logger().info(f"Detected {len(circles[0])} circle(s). Best one of radius {best_circle[2]}. Center:{best_circle[1],best_circle[2]} ")
+            self.tracker.draw_trajectory(latest_image)
+            cv2.circle(latest_image, (best_circle[0], best_circle[1]), best_circle[2], (0, 255, 0), 2)  # Draw the circle
+            cv2.circle(latest_image, (best_circle[0], best_circle[1]), 2, (0, 0, 255), 3)  # Red dot at the center
+            
+            # Calculate the distance to the circle
+            focal_length_px = 350.15 # 1350  # Focal length in pixels; focal_pixel = (image_width_in_pixels * 0.5) / tan(FOV * 0.5 * PI/180) that gave me 35 015
+            real_radius = 20.8  # Radius of the circle in real life
+            detected_radius = best_circle[2]  # Radius of the circle in the image (in pixels)
+            
+            distance = (focal_length_px * real_radius) / detected_radius
+            distance2 = (4*20.8*480)/(detected_radius*2*2.7) #2.7 is the sensor height in mm
+            self.get_logger().info(f"Distance to the circle: {distance:.2f} cm")
+            self.get_logger().info(f"Distance to the circle, method 2: {distance2:.2f} cm") # ref: 2
+            
+            
+            ######## Calculate X and Y distances ###########
+            
+            image_center_x = latest_image.shape[1] / 2
+            image_center_y = latest_image.shape[0] / 2
+            
+            delta_x = best_circle[0] - image_center_x
+            delta_y = best_circle[1] - image_center_y
+            
+            distance_x = (delta_x * real_radius) / detected_radius
+            distance_y = (delta_y * real_radius) / detected_radius
+            
+            self.get_logger().info(f"Distance to the circle (X-axis): {distance_x:.2f} cm")
+            self.get_logger().info(f"Distance to the circle (Y-axis): {distance_y:.2f} cm")
+            
+            #################################################
+            
+             
+            
+            distance_msg = Float32()
+            distance_msg.data = distance2/100
+            self.distance_pub.publish(distance_msg)
+            
+            self.get_logger().info(f"Detected {len(circles[0])} circle(s). Best one of radius {best_circle[2]}. Center: {best_circle[1], best_circle[2]} ")
         else:
             self.get_logger().info("No circles detected.")
 
-        cv2.imshow("Detected Circles", cv_image)
+        cv2.imshow("Detected Circles", latest_image)
         cv2.waitKey(1)
-        
-        
+               
 class KalmanTracker:
     def __init__(self, delta_t=1.0, max_speed=5, trajectory_length=100):
         # Initialize state vector [x, y, vx, vy]
