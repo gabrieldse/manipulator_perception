@@ -23,16 +23,10 @@ class RingTrackingNode(Node):
         self.ring_position_pub = self.create_publisher(
             Pose, '/ring_position', 10)
         
-        ## Image initializations
-        # Suscribers definitions
         self.sub_img = self.create_subscription(Image,'/image_raw',self.cb_image,1)
         self.bridge = CvBridge()
-        # frequency = 10 # Hz
-        # self.timer = self.create_timer(1.0 / frequency, self.timer_callback)
         self.ring_detector = RingDetector()
         self.latest_image = None
-
-        # Simulate ring position updates
         self.timer = self.create_timer(1.0, self.publish_ring_position)
 
     def grab_ring_callback(self, request, response):
@@ -48,36 +42,60 @@ class RingTrackingNode(Node):
     #     return response
 
     def publish_ring_position(self):
-        
-        ring_position = self.ring_detector.detect_ring(self.latest_image)
-
-        if ring_position:
-            x, y, r = ring_position  # Ring's center (x, y) and radius (r)
-            msg = Pose()
-            msg.position.x = float(x/100)
-            msg.position.y = float(y/100)
-            msg.position.z = float(0)
-            self.ring_position_pub.publish(msg)
-            self.get_logger().info(f"Publishing ring position: ({x}, {y}, {0})")
-            
-            # OPTIONAL
-            self.draw_ring(self.latest_image, x, y, r)
-
-            # Optionally, display the image with the ring drawn on it
-            cv2.imshow("Ring Detection", self.latest_image)
-            cv2.waitKey(1)  # Update the window
-        else:
-            self.get_logger().info("No ring detected.")
-            
-    # def timer_callback(self):
-        """
-        Timer callback for frequency of circle detection.
-        """
         if self.latest_image is not None:
-            self.get_logger().info(f"Image dimensions: {self.latest_image.shape}")
-            self.ring_detector.detect_ring(self.latest_image)
+            ring_position = self.ring_detector.detect_ring(self.latest_image)
+            
+            if ring_position is not None:
+                x, y, r = ring_position
+
+                ring_position_camera2real = self.ring_position_camera2real(ring_position)
+            
+                if ring_position_camera2real:
+                    x_m, y_m, z_m = ring_position_camera2real  # Ring's center (x, y) and radius (r)
+                    msg = Pose()
+                    msg.position.x = float(x_m)
+                    msg.position.y = float(y_m)
+                    msg.position.z = float(z_m)
+                    self.ring_position_pub.publish(msg)
+                    self.get_logger().info(f"Publishing ring position [m]: ({x_m}, {y_m}, {z_m})")
+                    
+                    # OPTIONAL
+                    self.draw_ring(self.latest_image, x, y, r)
+                    cv2.imshow("Ring Detection", self.latest_image)
+                    cv2.waitKey(1)  # Update the window
+                else:
+                    self.get_logger().info("No ring detected.")
+                    
+            else:
+                self.get_logger().info("No ring detected in the image.")
         else:
-            self.get_logger().info("No image received yet.")
+            self.get_logger().warn("No image received yet. Skipping ring detection.")
+            
+    def ring_position_camera2real(self, ring_position):
+    
+        x, y, r =  ring_position
+        
+        focal_length_px = 350.15
+        real_radius = 0.208  # m
+        r_px = r
+        
+        distance_z = (focal_length_px * real_radius) / r_px
+        distance2 = (4 * 20.8 * 480) / (r_px * 2 * 0.027)  # 2.7 is the sensor height in mm
+    
+        
+        # Calculate X and Y distances
+        image_center_x = self.latest_image.shape[1] / 2
+        image_center_y = self.latest_image.shape[0] / 2
+        
+        delta_x = image_center_x - x
+        delta_y = image_center_y - y
+        
+        distance_x = (delta_x * real_radius) / r_px
+        distance_y = (delta_y * real_radius) / r_px
+        
+        z = distance_z
+        
+        return (x, y, z)
 
     def cb_image(self, msg):
         """
@@ -115,9 +133,7 @@ class RingTrackingNode(Node):
         cv2.putText(self.latest_image, text_z, text_position_z, font, font_scale, font_color, font_thickness)
         cv2.putText(self.latest_image, text_x, text_position_x, font, font_scale, font_color, font_thickness)
         cv2.putText(self.latest_image, text_y, text_position_y, font, font_scale, font_color, font_thickness)
-            
-        
-    
+              
 def main(args=None):
     rclpy.init(args=args)
     node = RingTrackingNode()
