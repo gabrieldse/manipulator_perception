@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction
+from launch.actions import DeclareLaunchArgument, GroupAction, LogInfo
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -58,8 +58,11 @@ def generate_launch_description():
     
     camera_viewer = Node(package='usb_cam', executable='show_image', name='show_image', output='screen')
 
-
-    ld.add_action(camera_node)
-    ld.add_action(ring_tracker_node)
+    ld.add_action(camera_node)    
+    ld.add_action(
+        GroupAction(
+            actions=[LogInfo(msg="Waiting for camera node to be ready..."), ring_tracker_node]
+            )
+        )
     
     return ld
