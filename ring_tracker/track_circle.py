@@ -51,7 +51,7 @@ class DetectCircle(Node):
         self.get_logger().info("CircleDetect start")
         
         self.sub_img = self.create_subscription(Image,'/image_raw',self.cb_image,1)
-        frequency = 22 # Hz
+        frequency = 10 # Hz
         # self.ts = ApproximateTimeSynchronizer([self.sub_img], queue_size=1, slop=1.0 / frequency)
         self.timer = self.create_timer(1.0 / frequency, self.timer_callback)  # 5 Hz
         # self.ts.registerCallback(self.cb_image)

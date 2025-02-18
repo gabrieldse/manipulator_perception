@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'track_circle = ring_tracker.track_circle:main',
+            'ring_tracking_node = ring_tracker.ring_tracking_node:main'
         ],
     },
 )

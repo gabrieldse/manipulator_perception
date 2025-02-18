@@ -50,9 +50,16 @@ def generate_launch_description():
             remappings=camera.remappings
         )
     
+    ring_tracker_node = Node(
+            package='ring_tracker',
+            executable='ring_tracking_node',
+            output='screen',
+        )
+    
     camera_viewer = Node(package='usb_cam', executable='show_image', name='show_image', output='screen')
 
 
     ld.add_action(camera_node)
+    ld.add_action(ring_tracker_node)
     
     return ld
