@@ -1,4 +1,38 @@
-'/tmp/calibrationdata.tar.gz'
+
+"""
+Ref 2 : https://www.traimaocv.fr/CoursStereoVision/co/ModCamera_1.html
+
+La taille du pixel est :
+
+"« CMOS Sensor Data »"
+
+"« The CMOS sensor in the Logitech C270 webcam features the following data : »"
+
+"« Sensor Resolution = 1280 x 960 »"
+
+"« Pixel Dimension = 2,8 μm x 2,8 μm »"
+
+"« Sensor Dimension = 3,5 mm x 2,7 mm »"
+
+"« Sensor area = 9,45 mm2 »"
+"""
+
+"""
+Camera parameters
+focal distance = 4.0 mm
+focal lenght = 1350px
+FOV - 60°
+Optical Resolution (True)	1280 x 960 1.2MP
+Image Capture (4:3 SD)	320x240, 640x480 1.2 MP, 3.0 MP
+Image Capture (16:9 W)	360p, 480p, 720p
+Video Capture (4:3 SD)	320x240, 640x480, 800x600
+Video Capture (16:9 W)	360p, 480p, 720p,
+Frame Rate (max)	30fps @ 640x480
+
+1430 px
+
+"""
+
 
 **** Calibrating ****
 mono pinhole calibration...

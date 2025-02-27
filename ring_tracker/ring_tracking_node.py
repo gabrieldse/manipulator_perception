@@ -37,7 +37,7 @@ class RingTrackingNode(Node):
 
     # def move_camera_callback(self, request, response):
     #     self.get_logger().info(f"Moving camera by: {request.delta_x}, {request.delta_y}, {request.delta_z}")
-    #     # Simulate movement (replace with actual logic)
+    #     # Simulate movement TODO
     #     response.success = True
     #     return response
 
@@ -57,10 +57,10 @@ class RingTrackingNode(Node):
                     msg.position.y = float(y_m)
                     msg.position.z = float(z_m)
                     self.ring_position_pub.publish(msg)
-                    self.get_logger().info(f"Publishing ring position [m]: ({x_m}, {y_m}, {z_m})")
+                    # self.get_logger().info(f"Publishing ring position [m]: ({x_m}, {y_m}, {z_m})")
                     
                     # OPTIONAL
-                    self.draw_ring(self.latest_image, x, y, r)
+                    self.draw_ring(self.latest_image, x, y, r, x_m, y_m, z_m)
                     cv2.imshow("Ring Detection", self.latest_image)
                     cv2.waitKey(1)  # Update the window
                 else:
@@ -71,32 +71,6 @@ class RingTrackingNode(Node):
         else:
             self.get_logger().warn("No image received yet. Skipping ring detection.")
             
-    def ring_position_camera2real(self, ring_position):
-    
-        x, y, r =  ring_position
-        
-        focal_length_px = 350.15
-        real_radius = 0.208  # m
-        r_px = r
-        
-        distance_z = (focal_length_px * real_radius) / r_px
-        distance2 = (4 * 20.8 * 480) / (r_px * 2 * 0.027)  # 2.7 is the sensor height in mm
-    
-        
-        # Calculate X and Y distances
-        image_center_x = self.latest_image.shape[1] / 2
-        image_center_y = self.latest_image.shape[0] / 2
-        
-        delta_x = image_center_x - x
-        delta_y = image_center_y - y
-        
-        distance_x = (delta_x * real_radius) / r_px
-        distance_y = (delta_y * real_radius) / r_px
-        
-        z = distance_z
-        
-        return (x, y, z)
-
     def cb_image(self, msg):
         """
         Callback for receiving image from camera feed.
@@ -107,16 +81,17 @@ class RingTrackingNode(Node):
             self.latest_image = cv_image 
         except Exception as e:
             self.get_logger().error(f"Error in image conversion: {e}")
-            
-    def draw_ring(self, image, x, y, r):
+          
+# MOVE TO ring_detector.py  
+    def draw_ring(self, image, x, y, r, x_m, y_m, z_m):
         if image is not None:
             cv2.circle(image, (x, y), r, (0, 255, 0), 4)  # Green circle
             cv2.rectangle(image, (x - 5, y - 5), (x + 5, y + 5), (0, 128, 255), -1)  # Center dot
         
         # Display distances on the screen
-        text_x = f"X Distance: {x:.2f} cm"
-        text_y = f"Y Distance: {y:.2f} cm"
-        text_z = f"Z Distance: {r:.2f} cm"
+        text_x = f"X Distance: {x_m:.2f} m"
+        text_y = f"Y Distance: {y_m:.2f} m"
+        text_z = f"Z Distance: {z_m:.2f} m"
         
         # Position of the text
         text_position_z = (10, 30)  # (x, y) coordinates
@@ -125,15 +100,40 @@ class RingTrackingNode(Node):
         
         # Font settings
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.4
-        font_color = (255, 255, 255)  # White color
+        font_scale = 0.6
+        font_color = (255, 255, 255)  # White
         font_thickness = 1
         
         # Put text on the image
         cv2.putText(self.latest_image, text_z, text_position_z, font, font_scale, font_color, font_thickness)
         cv2.putText(self.latest_image, text_x, text_position_x, font, font_scale, font_color, font_thickness)
         cv2.putText(self.latest_image, text_y, text_position_y, font, font_scale, font_color, font_thickness)
-              
+
+    def ring_position_camera2real(self, ring_position):
+        
+            x, y, r =  ring_position
+            
+            f_x = 350.15
+            real_radius = 0.208  # m
+            r_px = r
+            
+            Z = (f_x * real_radius) / r_px
+            
+            # Image center px
+            c_x = self.latest_image.shape[1] / 2
+            c_y = self.latest_image.shape[0] / 2
+            
+            # Intrinsic matrix for the conversion
+            f_y = f_x # square pixels
+            u_prime = (x - c_x) / f_x
+            v_prime = (y - c_y) / f_y
+
+            # Calculate real-world coordinates in meters
+            X = u_prime * Z 
+            Y = v_prime * Z
+            
+            return (X, Y, Z)
+
 def main(args=None):
     rclpy.init(args=args)
     node = RingTrackingNode()
